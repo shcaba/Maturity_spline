@@ -67,6 +67,7 @@ knot.test.props<-function(knots.in,dat.in)
   return(cbind(knots.Mat50.out,bin.prop.out))
 }
 
+#Test knots using raw maturity data
 knot.test.binary<-function(knots.in,dat.in)
 {
   
