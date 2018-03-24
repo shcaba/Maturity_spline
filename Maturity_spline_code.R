@@ -13,7 +13,7 @@ maturity.fxn.SS<-function(lts,slope,Lmat50)
 #Mat.bins.props
 #This function calculates the proportion maturity given
 #1) Lengths or ages (data.in)
-#2) Number of desired bins (num.bins)
+#2) Number of desired bins OR pre-specified bin structure (num.bins)
 #3) Funtional or biological maturity (fxn_or_bio; FUNCTIONAL=1; BIOLOGICAL=2)
 #Returns proportion maturity by length/age bins
 Mat.bins.props<-function(data.in,num.bins,fxn_or_bio=1)
@@ -21,12 +21,14 @@ Mat.bins.props<-function(data.in,num.bins,fxn_or_bio=1)
   name.temp<-names(data.in)[1]
   data.in<-na.omit(data.in)
   names(data.in)[1]<-"METRIC"
-  bins<-pretty(data.in$METRIC,num.bins)
+  if(length(num.bins)==1){bins<-pretty(data.in$METRIC,num.bins)}
+  if(length(num.bins)>1){bins<-num.bins}
   bins_ind<-.bincode(data.in$METRIC,bins)
   data.in$BINS<-bins[bins_ind]
-  if(fxn_or_bio==1){Prop_mat_bins<-dcast(data.in,1~METRIC,sum,na.rm=T,value.var = "Functional_maturity")[-1]/table(data.in$METRIC)}
-  if(fxn_or_bio==2){Prop_mat_bins<-dcast(data.in,1~METRIC,sum,na.rm=T,value.var = "Biological_maturity")[-1]/table(data.in$METRIC)}
-  Data.in.props<-as.data.frame(cbind(as.numeric(colnames(Prop_mat_bins)),t(Prop_mat_bins),table(data.in$METRIC)))
+  data.in<-na.omit(data.in)
+  if(fxn_or_bio==1){Prop_mat_bins<-dcast(data.in,1~BINS,sum,na.rm=T,value.var = "Functional_maturity")[-1]/table(data.in$BINS)}
+  if(fxn_or_bio==2){Prop_mat_bins<-dcast(data.in,1~BINS,sum,na.rm=T,value.var = "Biological_maturity")[-1]/table(data.in$BINS)}
+  Data.in.props<-as.data.frame(cbind(as.numeric(colnames(Prop_mat_bins)),t(Prop_mat_bins),table(data.in$BINS)))
   colnames(Data.in.props)[2:3]<-c("Prop_mat","N")
   print(ggplot(Data.in.props,aes(V1,Prop_mat))+geom_point(aes(size=N))+xlab(paste0(name.temp,"_bins"))) #basic plot to see bin structure#
   colnames(Data.in.props)[1]<-paste0(name.temp,"_bins")
@@ -90,25 +92,40 @@ knot.test.binary<-function(knots.in,dat.in)
   return(knots.Mat50.out)
 }
 
-
-Maturity.comp.plots<-function(mat.dat.in,matvals.glm,spline.model)
+logistic.mat.fit<-function(Data.in)
 {
-  #mat.nls<-as.data.frame(maturity.fxn.SS(mat.dat.in$Lt_bins,matvals.nls[1],matvals.nls[2]))
-  mat.glm<-as.data.frame(maturity.fxn.SS(mat.dat.in$Lt_bins,matvals.glm[1],matvals.glm[2]))
-  mat.spline<-as.data.frame(predict(spline.model,mat.dat.in$Lt_bins,type="response"))
+  fit.mat.glm <- glm (maturity ~ 1 + length, data <-data.frame(length = Data.in$Length, maturity <- Data.in$Functional_maturity),
+                      family = binomial(link ="logit"))
+  
+  matvals.glm<-c(-fit.mat.glm$coefficients[2], fit.mat.glm$coefficients[1]/-fit.mat.glm$coefficients[2])
+  return(list(logistic.model=fit.mat.glm,parameters=matvals.glm))
+}
+
+Maturity.comp.plots<-function(mat.dat.in,mat.props.in,bins.in,logistic.parms,spline.model,spline.model.bins)
+{
+  #Logistic predictions
+  mat.glm<-as.data.frame(maturity.fxn.SS(bins.in,logistic.parms[1],logistic.parms[2]))
+  mat.glm$model<-"glm"
+  #Spline binary data predictions
+  mat.spline<-as.data.frame(predict(spline.model,bins.in,type="response"))
   mat.spline$y[mat.spline$y<0]<-0
   mat.spline$y[mat.spline$y>1]<-1
-  
   colnames(mat.spline)<-c("lts","maturity")
-  
- # mat.nls$model<-"nls"
-  mat.glm$model<-"glm"
   mat.spline$model<-"spline"
-  
-  #mat.nls$N<-mat.glm$N<-mat.spline$N<-YE.mat.props$N
   mat.out<-rbind(mat.glm,mat.spline)
+  #Spline binned predictions
+  if(exists("spline.model.bins")==T)
+  {
+    mat.spline.bins<-as.data.frame(predict(spline.model.bins,bins.in,type="response"))
+    mat.spline.bins$y[mat.spline.bins$y<0]<-0
+    mat.spline.bins$y[mat.spline.bins$y>1]<-1
+    colnames(mat.spline.bins)<-c("lts","maturity")
+    mat.spline.bins$model<-"spline_bins"
+    mat.out<-rbind(mat.glm,mat.spline,mat.spline.bins)
+  }
+  #Plot models
   mat.out$model<-as.factor(mat.out$model)
-  mat.gg<-ggplot(mat.out,aes(lts,maturity,color=model))+geom_line(lwd=2)+geom_point(aes(Lt_bins,Prop_mat,size=N),mat.dat.in,color="black")
+  mat.gg<-ggplot(mat.out,aes(lts,maturity,color=model))+geom_line(lwd=2)+geom_point(aes(Length_bins,Prop_mat,size=N),mat.props.in,color="black")
   print(mat.gg)
   return(mat.spline)
 }
@@ -123,49 +140,39 @@ Maturity.comp.plots<-function(mat.dat.in,matvals.glm,spline.model)
 
 #Load data
 setwd("D:/JMC/Documents/GitHub/Maturity_spline/")
-load("AU_cert.DMP")
+load("ARRA_dat.DMP")
 
+Data.in<-AU.cert
 #Prep data: age or length
 Data.in.lt<-Data.in[,c(9,15,16)]
 Data.in.age<-Data.in[,c(13,15,16)]
 #Define bin structure
 Data.in.bins.lt<-Mat.bins.props(Data.in.lt,24,fxn_or_bio=1)
+Data.in.bins.lt<-Mat.bins.props(Data.in.lt,seq(0,40,2),fxn_or_bio=1)
 Data.in.bins.age<-Mat.bins.props(Data.in.age,60,fxn_or_bio=1)
 #Choose knots for spline; includes cross validation plot as standard output
 knots.out<-knot.test.props(knots.in=c(5:24),dat.in=Data.in.bins.lt)
 knots.out.fxn<-knot.test.binary(knots.in=c(5:24),dat.in=Data.in.lt)
 
+Data.in<-Data.in.lt
+###glm fit###
+glm.model<-logistic.mat.fit(Data.in)
+#Spline model
+spline.out<-smooth.spline(x=Data.in$Length,y=Data.in$Functional_maturity,all.knots = FALSE,nknots = 10)
+Lmat_50<-uniroot(function(xx) predict(spline.out,xx, type="response")$y - 0.5,range(Data.in$Length))$root ####L50 result###
+Data.in.bins<-Data.in.bins.lt
+spline.out.bins<-smooth.spline(x=Data.in.bins$Length_bins,y=Data.in.bins$Prop_mat,w=Data.in.bins$N,all.knots = FALSE,nknots = 10)
+Lmat_50_bins<-uniroot(function(xx) predict(spline.out.bins,xx, type="response")$y - 0.5,range(Data.in.bins$Length_bins))$root ####L50 result###
 
 ### Plot comparisons ###
-matplot<-Maturity.comp.plots(Data.in.props,matvals.glm,spline.out.13) ###Adjusting the bins, gives a false results for  N now###
+matplot<-Maturity.comp.plots(Data.in,Data.in.bins.lt,seq(0,38,2),glm.model$parameters,spline.out,spline.out.bins) ###Adjusting the bins, gives a false results for  N now###
 
 
 
-
-
-
-###glm fit###
-logistic.mat.fit<-function(Data.in.lt)
-fit.mat.glm <- glm (maturity ~ 1 + length, data <-data.frame(length = Data.in.lt$Length, maturity <- Data.in.bins.lt$Functional_maturity),
-                    family = binomial(link ="logit"))
-summary(fit.mat.glm)
-Aglm<- -13.40066
-Bglm<- 0.56006
-matvals.glm<-c(-fit.mat.glm$coefficients[2], fit.mat.glm$coefficients[1]/-fit.mat.glm$coefficients[2])
-
-
-#Choose knots
-spline.out.13<-smooth.spline(x=Data.in.bins.lt$Length_bins,y=Data.in.bins.lt$Prop_mat,w=Data.in.bins.lt$N,all.knots = FALSE,nknots = 13)
-spline.out.9<-smooth.spline(x=Data.in.bins.lt$Length_bins,y=Data.in.bins.lt$Prop_mat,w=Data.in.bins.lt$N,all.knots = FALSE,nknots = 9)
-uniroot(function(xx) predict(spline.out.13,xx, type="response")$y - 0.5,range(Data.in.bins.lt$Length_bins))$root ####L50 result###
-spline.out.13.01<-smooth.spline(x=Data.in.lt$Length,y=Data.in.lt$Functional_maturity,all.knots = FALSE,nknots = 13)
-spline.out.9.01<-smooth.spline(x=Data.in.lt$Length,y=Data.in.lt$Functional_maturity,all.knots = FALSE,nknots = 9)
-uniroot(function(xx) predict(spline.out.13.01,xx, type="response")$y - 0.5,range(Data.in.lt$Length))$root ####L50 result###
 
 #Predict spline for assessment
 st.ass.bins<-seq(8,40,2)
-mat.spline<-as.data.frame(predict(spline.out.13,st.ass.bins,type="response"))
-mat.spline.fxn<-as.data.frame(predict(spline.out.13.01,st.ass.bins,type="response"))
+mat.spline<-as.data.frame(predict(spline.out,st.ass.bins,type="response"))
 plot(mat.spline)
 lines(mat.spline.fxn)
 
@@ -173,7 +180,3 @@ mat.spline<-as.data.frame(predict(spline.out.9,st.ass.bins,type="response"))
 mat.spline.fxn<-as.data.frame(predict(spline.out.9.01,st.ass.bins,type="response"))
 plot(mat.spline)
 lines(mat.spline.fxn)
-
-
-
-              #####Biological maturity all years -Glm model - calculate 95% CI########
