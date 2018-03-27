@@ -96,7 +96,7 @@ knot.test.binary<-function(knots.in,dat.in)
 
 logistic.mat.fit<-function(Data.in)
 {
-  fit.mat.glm <- glm (maturity ~ 1 + length, data <-data.frame(length = Data.in$Length, maturity <- Data.in$Functional_maturity),
+  fit.mat.glm <- glm (maturity ~ 1 + length, data <-data.frame(length = Data.in[,1], maturity <- Data.in$Functional_maturity),
                       family = binomial(link ="logit"))
   
   matvals.glm<-c(-fit.mat.glm$coefficients[2], fit.mat.glm$coefficients[1]/-fit.mat.glm$coefficients[2])
@@ -128,21 +128,21 @@ Maturity.comp.plots<-function(mat.dat.in,mat.props.in,bins.in,logistic.parms,spl
   #Logistic predictions
   mat.glm<-as.data.frame(maturity.fxn.SS(bins.in,logistic.parms[1],logistic.parms[2]))
   colnames(mat.glm)<-c(names(mat.dat.in)[1],"Maturity")
-  mat.glm$model<-"glm"
+  mat.glm$model<-"GLM_binary"
   #Spline binary data predictions
   mat.spline<-as.data.frame(Spline.fit(spline.model,bins.in,data.type =names(mat.dat.in)[1]))
-  mat.spline$model<-"spline"
+  mat.spline$model<-"Spline_binary"
   mat.out<-rbind(mat.glm,mat.spline)
   #Spline binned predictions
   if(exists("spline.model.props")==T)
   {
     mat.spline.bins<-as.data.frame(Spline.fit(spline.model.props,bins.in,data.type =names(mat.dat.in)[1]))
-    mat.spline.bins$model<-"spline_bins"
+    mat.spline.bins$model<-"Spline_props"
     mat.out<-rbind(mat.glm,mat.spline,mat.spline.bins)
   }
   #Plot models
   mat.out$model<-as.factor(mat.out$model)
-  mat.gg<-ggplot(mat.out,aes_string(names(x=mat.dat.in)[1],y="Maturity",color="model"))+geom_line(lwd=2)+geom_point(aes(Length_bins,Prop_mat,size=N),mat.props.in,color="black")
+  mat.gg<-ggplot(mat.out,aes_string(names(x=mat.dat.in)[1],y="Maturity",color="model"))+geom_line(lwd=2)+geom_point(aes_string(names(mat.props.in)[1],"Prop_mat",size="N"),mat.props.in,color="black")
   print(mat.gg)
   return(mat.spline)
 }
