@@ -2,6 +2,8 @@ library(reshape2)
 library(ggplot2)
 library(TTR)
 library(mgcv)
+library(msir)
+library(DescTools)
 
 #Maturity function found in Stock Synthesis
 maturity.fxn.SS<-function(lts,slope,Lmat50)
@@ -147,7 +149,14 @@ Maturity.comp.plots<-function(mat.dat.in,mat.props.in,bins.in,logistic.parms,spl
   return(mat.spline)
 }
 
-
+spline.95CI<-function(spline.out,CI.pick="upper")
+{
+res <- (spline.out$yin - spline.out$y)/(1-spline.out$lev)      # jackknife residuals
+sigma <- sqrt(var(res))                     # estimate sd
+if(CI.pick=="upper"){CI.out <- spline.out$y + 1.96*sigma*sqrt(spline.out$lev)}   # upper 95% conf. band
+if(CI.pick=="lower"){CI.out <- spline.out$y - 1.96*sigma*sqrt(spline.out$lev)}   # lower 95% conf. band 
+return(CI.out)
+}
 
 ################################
 ################################
