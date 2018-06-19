@@ -22,24 +22,18 @@ glm.model<-logistic.mat.fit(Data.in.model)
 #Spline model
 spline.out<-smooth.spline(x=Data.in.model$Length,y=Data.in.model$Functional_maturity,all.knots = FALSE,nknots = 11)
 Lmat_50<-uniroot(function(xx) predict(spline.out,xx, type="response")$y - 0.5,range(Data.in.model$Length))$root ####L50 result###
-#spline.95CI(spline.out)
-
-#Look for the u ncertainty in Lmat50%
-plot(spline.out) #Plots the curve
-lines(spline.out) #Plots 95% CI for the spline
-abline(h=0.5) #Notes where the 50% maturity line is
-locator() #Use this function to click on the endpoints of the CI interval that are found on the horizontal 50% maturity line. Then exit the locator function (in RStudio, there is a button at the top left of the plot that says "Finish") to get the coordinates for the two points you clicked. The y coordinates should be very close to 0.5 if you did a good job picking the points. The x values would then be the 95% CI for Lmat.
+#Calculate uncertainty in Lmat50%
+Lmat_50_boot<-Boot.Lmat50(Data.in.model,1,3,1000,11,Lmat_50)
+quantile(Lmat_50_boot,probs=c(0.05,0.5,0.95),na.rm=TRUE)
 
 
 #Fit spline model using proportions
 Data.in.props.model<-Data.in.bins.lt
 spline.out.bins<-smooth.spline(x=Data.in.props.model$Length_bins,y=Data.in.props.model$Prop_mat,w=Data.in.props.model$N,all.knots = FALSE,nknots = 13)
 Lmat_50_bins<-uniroot(function(xx) predict(spline.out.bins,xx, type="response")$y - 0.5,range(Data.in.props.model$Length_bins))$root ####L50 result###
-
-plot(spline.out.bins)
-lines(spline.out.bins)
-abline(h=0.5)
-locator() #Use this function to click on the endpoints of the CI interval that are found on the horizontal 50% maturity line. Then exit the locator function (in RStudio, there is a button at the top left of the plot that says "Finish") to get the coordinates for the two points you clicked. The y coordinates should be very close to 0.5 if you did a good job picking the points. The x values would then be the 95% CI for Lmat.
+#Calculate uncertainty in Lmat50%
+Lmat_50_bins_boot<-Boot.Lmat50(Data.in.props.model,1,2,1000,11,Lmat_50_bins)
+quantile(Lmat_50_bins_boot,probs=c(0.05,0.5,0.95),na.rm=TRUE)
 
 ### Plot comparisons ###
 matplot<-Maturity.comp.plots(Data.in.model,Data.in.props.model,seq(0,36,1),glm.model$parameters,spline.out,spline.out.bins) ###Adjusting the bins, gives a false results for  N now###

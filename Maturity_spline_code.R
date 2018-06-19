@@ -158,6 +158,25 @@ if(CI.pick=="lower"){CI.out <- spline.out$y - 1.96*sigma*sqrt(spline.out$lev)}  
 return(CI.out)
 }
 
+#Boostrap Lmat 50%
+Boot.Lmat50<-function(Data.in,xrow,yrow,Nboot,nknots.in,lmat50.in)
+{
+Lmat_50.boot<-rep(NA,Nboot)
+Data.L50.less<-Data.in[Data.in[,1]<=lmat50.in,]
+Data.L50.more<-Data.in[Data.in[,1]>lmat50.in,]
+for(i in 1:Nboot)
+  {
+    boot.data.1<-Data.L50.less[sample(nrow(Data.L50.less),dim(Data.L50.less)[1],replace=T),]
+    boot.data.2<-Data.L50.more[sample(nrow(Data.L50.more),dim(Data.L50.more)[1],replace=T),]
+    boot.data<-rbind(boot.data.1,boot.data.2)
+    spline.out.boot<-smooth.spline(x=boot.data[,xrow],y=boot.data[,yrow],all.knots = FALSE,nknots = nknots.in)
+    tryCatch(Lmat_50.boot[i]<-uniroot(function(xx) predict(spline.out.boot,xx, type="response")$y - 0.5,range(boot.data[,xrow]))$root,error=function(e){warning(conditionMessage(e)); NA}) ####L50 result###
+#   print(class(root.error.check))
+#   if(class(root.error.check)!="try-error"){Lmat_50.boot[i]<-uniroot(function(xx) abs(predict(spline.out.boot,xx, type="response")$y - 0.5),range(boot.data[,xrow]),tol=0.0001)$root} ####L50 result###
+  }
+return(Lmat_50.boot)
+}
+
 ################################
 ################################
 
